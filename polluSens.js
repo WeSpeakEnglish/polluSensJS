@@ -1,4 +1,4 @@
-/** polluSensSerial.js - browser-compatible version **/
+/** pollusens.js - browser-compatible version with built-in connect/disconnect and UI helpers **/
 (function(global) {
   function parseByteValue(v) {
     return typeof v === 'string' && v.startsWith('0x') ? parseInt(v, 16) : v;
@@ -20,7 +20,7 @@
     return basePath + 'sensors.json';
   }
 
-  class PolluSensSerial {
+  class PolluSens {
     constructor(config) {
       this.config = config;
       this.port = null;
@@ -90,19 +90,70 @@
 
     static async connectByName(sensorName, url = null) {
       const [config] = await this.loadConfig(url, sensorName);
-      const instance = new PolluSensSerial(config);
+      const instance = new PolluSens(config);
       await instance.connect();
       return instance;
     }
 
     static async disconnectAndCleanup(instance) {
-      if (!instance || !(instance instanceof PolluSensSerial)) return;
+      if (!instance || !(instance instanceof PolluSens)) return;
       await instance.disconnect();
       instance.onData = null;
       instance.onRawFrame = null;
       instance.onError = null;
       instance.readQueue = [];
       instance.buffer = [];
+    }
+
+    static async init({ sensorSelect, debugOutput }) {
+      this._ui = {
+        sensorSelect: document.querySelector(sensorSelect),
+        debugOutput: document.querySelector(debugOutput)
+      };
+      this._serial = null;
+
+      const names = await this.listSensorNames();
+      this._ui.sensorSelect.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join('');
+    }
+
+    static _append(msg) {
+      const area = this._ui.debugOutput;
+      area.value += msg + '\n';
+      area.scrollTop = area.scrollHeight;
+    }
+
+    static async connect() {
+      const name = this._ui.sensorSelect.value;
+      try {
+        this._serial = await this.connectByName(name);
+        this._append(`[Connected to ${name}]`);
+
+        this._serial.onData = parsed => {
+          const ts = new Date().toLocaleTimeString();
+          this._append(`[Parsed @ ${ts}]`);
+          for (const [k, v] of Object.entries(parsed)) {
+            this._append(`  ${k}: ${v}`);
+          }
+        };
+
+        this._serial.onRawFrame = raw => {
+          const hex = Array.from(raw).map(b => b.toString(16).padStart(2, '0')).join(' ');
+          this._append(`Raw: ${hex}`);
+        };
+
+        this._serial.onError = msg => this._append(`[Error] ${msg}`);
+
+      } catch (e) {
+        this._append(`[Failed to connect] ${e.message}`);
+      }
+    }
+
+    static async disconnect() {
+      if (this._serial) {
+        await this.disconnectAndCleanup(this._serial);
+        this._serial = null;
+        this._append(`[Disconnected]`);
+      }
     }
 
     async connect() {
@@ -266,7 +317,8 @@
     }
   }
 
-  global.PolluSensSerial = PolluSensSerial;
+  global.PolluSens = PolluSens;
 })(window);
+
 
 
