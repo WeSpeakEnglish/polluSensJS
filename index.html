@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PolluSensSerial Demo</title>
+  <style>
+    body { font-family: sans-serif; padding: 1em; }
+    label, button { margin-top: 1em; display: block; }
+    textarea { width: 100%; height: 200px; font-family: monospace; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h2>PolluSens Serial Monitor</h2>
+
+  <label>
+    Sensor:
+    <select id="sensorSelect"></select>
+  </label>
+
+  <button id="connectBtn">Connect</button>
+  <button id="disconnectBtn" disabled>Disconnect</button>
+
+  <textarea id="debugOutput" readonly></textarea>
+
+  <script src="polluSensSerial.js"></script>
+  <script>
+    const select = document.getElementById('sensorSelect');
+    const debug = document.getElementById('debugOutput');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    let serial = null;
+
+    function append(msg) {
+      debug.value += msg + '\n';
+      debug.scrollTop = debug.scrollHeight;
+    }
+
+    // Load sensor names
+    PolluSensSerial.listSensorNames().then(names => {
+      select.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('');
+    });
+
+    connectBtn.onclick = async () => {
+      const name = select.value;
+      try {
+        serial = await PolluSensSerial.connectByName(name);
+        append(`[Connected to ${name}]`);
+
+        // Optional: override default logging
+        serial.onData = parsed => {
+          const ts = new Date().toLocaleTimeString();
+          append(`[Parsed @ ${ts}]`);
+          for (const [k, v] of Object.entries(parsed)) {
+            append(`  ${k}: ${v}`);
+          }
+        };
+
+        serial.onRawFrame = data => {
+          const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+          append(`Raw: ${hex}`);
+        };
+
+        serial.onError = msg => append(`[Error] ${msg}`);
+
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+      } catch (e) {
+        append(`[Failed to connect] ${e.message}`);
+      }
+    };
+
+    disconnectBtn.onclick = async () => {
+      if (serial) {
+        await PolluSensSerial.disconnectAndCleanup(serial);
+        serial = null;
+        append(`[Disconnected]`);
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+      }
+    };
+  </script>
+</body>
+</html>
+
