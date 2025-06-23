@@ -19,11 +19,12 @@
 
   <script src="pollusens.js"></script>
   <script>
-    PolluSens.init({
-      sensorSelect: '#sensor',
-      debugOutput: '#debug'
+    window.addEventListener('DOMContentLoaded', () => {
+      PolluSens.init({
+        sensorSelect: '#sensor',
+        debugOutput: '#debug'
+      });
     });
-	
   </script>
 </body>
 </html>
